@@ -40,7 +40,10 @@ struct NodeBalancerListObject {
 
 #[derive(serde::Deserialize, Serialize, Debug)]
 struct NodeBalancerListData {
-    data: Vec<NodeBalancerListObject>
+    data: Vec<NodeBalancerListObject>,
+    page: u64,
+    pages: u64,
+    results: u64,
 }
 
 fn round(c: &f64) -> f64 {
@@ -85,6 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let obj: NodeBalancerListObject = d;
             println!("{:#?}", obj);
         }
+        println!("{:#?}", nbresult.pages);
     } else {
         eprintln!("Request failed with status: {}", response.status());
     }
