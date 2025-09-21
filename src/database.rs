@@ -29,7 +29,7 @@ pub struct NodeBalancerListObject {
 
 #[derive(serde::Deserialize, Serialize, Debug)]
 struct LkeCluster{
-    id: u64,
+    id: i32,
     label: String,
     r#type: String,
     url: String,
@@ -64,10 +64,11 @@ pub async fn update_db(nodebalancers: NodeBalancerListObject) -> Result<(), Box<
     let mut connection = create_client().await;
     let main_table = connection.batch_execute("
         CREATE TABLE IF NOT EXISTS nodebalancer (
-            id SERIAL PRIMARY KEY,
             ipv4 VARCHAR NOT NULL,
             region VARCHAR NOT NULL,
-            nb_id INTEGER NOT NULL
+            nb_id INTEGER NOT NULL,
+            lke_id INTEGER,
+            PRIMARY KEY (ipv4)
             );
     ");
 
@@ -82,7 +83,7 @@ pub async fn update_db(nodebalancers: NodeBalancerListObject) -> Result<(), Box<
             node VARCHAR NOT NULL,
             port INTEGER NOT NULL,
             state VARCHAR NOT NULL,
-            nodebalancer_id INTEGER NOT NULL REFERENCES nodebalancer 
+            nodebalancer_ipv4 VARCHAR NOT NULL REFERENCES nodebalancer 
             );
     ");
     match node_table.await {
@@ -93,10 +94,15 @@ pub async fn update_db(nodebalancers: NodeBalancerListObject) -> Result<(), Box<
     println!("{:#?}", nodebalancers);
     println!("Done");
 
-    let _ = connection.execute(
-            "INSERT INTO nodebalancer (ipv4, region, nb_id) VALUES ($1, $2, $3)",
-            &[&nodebalancers.ipv4, &nodebalancers.region, &nodebalancers.id],
+    let update = connection.execute(
+            "INSERT INTO nodebalancer (ipv4, region, nb_id, lke_id) VALUES ($1, $2, $3, $4)",
+            &[&nodebalancers.ipv4, &nodebalancers.region, &nodebalancers.id, &nodebalancers.lke_cluster.id],
     ).await;
+
+    match update {
+        Ok(success) => println!("Row updated."),
+        Err(e) => println!("{:?}", e),
+        }
 
     Ok(())
 
