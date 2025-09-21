@@ -100,7 +100,7 @@ async fn create_client() -> Client {
 
 }
 
-pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn db_init() -> Result<(), Box<dyn std::error::Error>> {
     let mut connection = create_client().await;
     let main_table = connection.batch_execute("
         CREATE TABLE IF NOT EXISTS nodebalancer (
@@ -117,6 +117,44 @@ pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), B
         Err(e) => println!("{:?}", e),
         }
 
+    let nb_cfg_conn  = connection.batch_execute("
+        CREATE TABLE IF NOT EXISTS nodebalancer_config  (
+            id INTEGER NOT NULL,
+            algorithm VARCHAR NOT NULL,
+            port INTEGER NOT NULL,
+            up INTEGER,
+            down INTEGER,
+            nodebalancer_id INTEGER NOT NULL REFERENCES nodebalancer,
+            PRIMARY KEY (id, nodebalancer_id)
+            );
+    ");
+    match nb_cfg_conn.await {
+        Ok(success) => println!("Nodebalancer config table availabe"),
+        Err(e) => println!("{:?}", e),
+        }
+
+
+    let node_table  = connection.batch_execute("
+        CREATE TABLE IF NOT EXISTS node  (
+            id INTEGER NOT NULL,
+            address VARCHAR NOT NULL,
+            status VARCHAR NOT NULL,
+            config_id INTEGER NOT NULL,
+            nodebalancer_id INTEGER NOT NULL REFERENCES nodebalancer,
+            PRIMARY KEY (id, nodebalancer_id)
+            );
+    ");
+    match node_table.await {
+        Ok(success) => println!("Node table availabe"),
+        Err(e) => println!("{:?}", e),
+        }
+
+    Ok(())
+
+}
+
+pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), Box<dyn std::error::Error>> {
+    let mut connection = create_client().await;
     println!("{:#?}", nodebalancers);
 
     let update = connection.execute(
@@ -141,23 +179,9 @@ pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), B
 
 pub async fn update_db_node(node: NodeObject) -> Result<(), Box<dyn std::error::Error>> {
     let mut node_connection = create_client().await;
-    let node_table  = node_connection.batch_execute("
-        CREATE TABLE IF NOT EXISTS node  (
-            id INTEGER NOT NULL,
-            address VARCHAR NOT NULL,
-            status VARCHAR NOT NULL,
-            nodebalancer_id INTEGER NOT NULL REFERENCES nodebalancer,
-            PRIMARY KEY (id, nodebalancer_id)
-            );
-    ");
-    match node_table.await {
-        Ok(success) => println!("Node table availabe"),
-        Err(e) => println!("{:?}", e),
-        }
-
     let nb_table = node_connection.execute(
-            "INSERT INTO node (id, address, status, nodebalancer_id) VALUES ($1, $2, $3, $4)",
-            &[&node.id, &node.address, &node.status, &node.nodebalancer_id],
+            "INSERT INTO node (id, address, status, config_id, nodebalancer_id) VALUES ($1, $2, $3, $4, $5)",
+            &[&node.id, &node.address, &node.status, &node.config_id, &node.nodebalancer_id],
     ).await;
 
     Ok(())
@@ -165,29 +189,12 @@ pub async fn update_db_node(node: NodeObject) -> Result<(), Box<dyn std::error::
 
 pub async fn update_db_config(nodebalancer_config: NodeBalancerConfigObject) -> Result<(), Box<dyn std::error::Error>> {
     let mut config_connection = create_client().await;
-    let nb_cfg_conn  = config_connection.batch_execute("
-        CREATE TABLE IF NOT EXISTS nodebalancer_config  (
-            id INTEGER NOT NULL,
-            algorithm VARCHAR NOT NULL,
-            port INTEGER NOT NULL,
-            up INTEGER,
-            down INTEGER,
-            nodebalancer_id INTEGER NOT NULL REFERENCES nodebalancer,
-            PRIMARY KEY (id, nodebalancer_id)
-            );
-    ");
     println!("{:#?}", nodebalancer_config);
-    println!("Done");
 
     let nb_cfg_table = config_connection.execute(
             "INSERT INTO nodebalancer_config (id, algorithm, port, up, down, nodebalancer_id) VALUES ($1, $2, $3, $4, $5, $6)",
             &[&nodebalancer_config.id, &nodebalancer_config.algorithm, &nodebalancer_config.port, &nodebalancer_config.nodes_status.up, &nodebalancer_config.nodes_status.down, &nodebalancer_config.nodebalancer_id],
     ).await;
-
-    match nb_cfg_conn.await {
-        Ok(success) => println!("Nodebalancer config table availabe"),
-        Err(e) => println!("{:?}", e),
-        }
 
     match nb_cfg_table {
         Ok(success) => println!("Nodebalancer config row updated"),

@@ -6,6 +6,7 @@ use chrono::{NaiveDateTime, DateTime, Utc, Local, TimeZone};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use reqwest::Client;
 use crate::database::{
+    db_init,
     update_db_node,
     update_db_nb,
     update_db_config,
@@ -60,6 +61,7 @@ fn epoch_to_dt(e: &String) -> String {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = db_init().await;
     let args = Args::parse();
     let url = format!("https://api.linode.com/{}/nodebalancers", args.api_version);
     let auth_header = format!("Bearer {}", args.token);
