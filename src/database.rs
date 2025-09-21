@@ -28,6 +28,18 @@ pub struct NodeBalancerListObject {
 }
 
 #[derive(serde::Deserialize, Serialize, Debug)]
+pub struct NodeObject {
+    address: String,
+    config_id: i32,
+    id: i32,
+    label: String,
+    mode: String,
+    nodebalancer_id: i32,
+    status: String,
+    weight: i32 
+}
+
+#[derive(serde::Deserialize, Serialize, Debug)]
 pub struct LkeCluster{
     id: i32,
     label: String,
@@ -37,24 +49,24 @@ pub struct LkeCluster{
 
 #[derive(serde::Deserialize, Serialize, Debug)]
 pub struct NodeBalancerConfigObject {
-  algorithm: String,
-  check: String,
-  check_attempts: i32,
-  check_body: String,
-  check_interval: i32,
-  check_passive: bool,
-  check_path: String,
-  check_timeout: i32,
-  cipher_suite: String,
-  id: i32,
-  nodebalancer_id: i32,
-  nodes_status: NodeStatus,
-  port: i32,
-  protocol: String,
-  proxy_protocol: String,
-  stickiness: String,
-  udp_check_port: i32,
-  udp_session_timeout: i32, 
+    algorithm: String,
+    check: String,
+    check_attempts: i32,
+    check_body: String,
+    check_interval: i32,
+    check_passive: bool,
+    check_path: String,
+    check_timeout: i32,
+    cipher_suite: String,
+    pub id: i32,
+    pub nodebalancer_id: i32,
+    nodes_status: NodeStatus,
+    port: i32,
+    protocol: String,
+    proxy_protocol: String,
+    stickiness: String,
+    udp_check_port: i32,
+    udp_session_timeout: i32, 
 }
 
 #[derive(serde::Deserialize, Serialize, Debug)]
@@ -92,11 +104,11 @@ pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), B
     let mut connection = create_client().await;
     let main_table = connection.batch_execute("
         CREATE TABLE IF NOT EXISTS nodebalancer (
+            nb_id INTEGER NOT NULL,
             ipv4 VARCHAR NOT NULL,
             region VARCHAR NOT NULL,
-            nb_id INTEGER NOT NULL,
             lke_id INTEGER,
-            PRIMARY KEY (ipv4)
+            PRIMARY KEY (nb_id)
             );
     ");
 
@@ -105,30 +117,15 @@ pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), B
         Err(e) => println!("{:?}", e),
         }
 
-    let node_table  = connection.batch_execute("
-        CREATE TABLE IF NOT EXISTS node  (
-            id SERIAL PRIMARY KEY,
-            node VARCHAR NOT NULL,
-            port INTEGER NOT NULL,
-            state VARCHAR NOT NULL,
-            nodebalancer_ipv4 VARCHAR NOT NULL REFERENCES nodebalancer 
-            );
-    ");
-    match node_table.await {
-        Ok(success) => println!("Nodebalancer table availabe"),
-        Err(e) => println!("{:?}", e),
-        }
-
     println!("{:#?}", nodebalancers);
-    println!("Done");
 
     let update = connection.execute(
-            "INSERT INTO nodebalancer (ipv4, region, nb_id, lke_id) VALUES ($1, $2, $3, $4)",
-            &[&nodebalancers.ipv4, &nodebalancers.region, &nodebalancers.id, &nodebalancers.lke_cluster.id],
+            "INSERT INTO nodebalancer (nb_id, ipv4, region, lke_id) VALUES ($1, $2, $3, $4)",
+            &[&nodebalancers.id, &nodebalancers.ipv4, &nodebalancers.region, &nodebalancers.lke_cluster.id],
     ).await;
 
     match update {
-        Ok(success) => println!("Row updated."),
+        Ok(success) => println!("NB Row updated."),
         Err(e) => println!("{:?}", e),
         }
 
@@ -136,28 +133,60 @@ pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), B
 
 }
 
-pub async fn update_db_config(nodebalancer_config: NodeBalancerConfigObject) -> Result<(), Box<dyn std::error::Error>> {
-    let mut connection = create_client().await;
-    let nb_cfg_table  = connection.batch_execute("
+pub async fn update_db_node(node: NodeObject) -> Result<(), Box<dyn std::error::Error>> {
+    let mut node_connection = create_client().await;
+    let node_table  = node_connection.batch_execute("
         CREATE TABLE IF NOT EXISTS node  (
-            id SERIAL PRIMARY KEY,
+            id INTEGER NOT NULL,
+            address VARCHAR NOT NULL,
+            status VARCHAR NOT NULL,
+            nodebalancer_id INTEGER NOT NULL REFERENCES nodebalancer,
+            PRIMARY KEY (id, nodebalancer_id)
+            );
+    ");
+    match node_table.await {
+        Ok(success) => println!("Node table availabe"),
+        Err(e) => println!("{:?}", e),
+        }
+
+    let nb_table = node_connection.execute(
+            "INSERT INTO node (id, address, status, nodebalancer_id) VALUES ($1, $2, $3, $4)",
+            &[&node.id, &node.address, &node.status, &node.nodebalancer_id],
+    ).await;
+
+    Ok(())
+}
+
+pub async fn update_db_config(nodebalancer_config: NodeBalancerConfigObject) -> Result<(), Box<dyn std::error::Error>> {
+    let mut config_connection = create_client().await;
+    let nb_cfg_conn  = config_connection.batch_execute("
+        CREATE TABLE IF NOT EXISTS nodebalancer_config  (
+            id INTEGER NOT NULL,
             algorithm VARCHAR NOT NULL,
             port INTEGER NOT NULL,
-            nodebalancer_nb_id VARCHAR NOT NULL REFERENCES nodebalancer 
+            up INTEGER,
+            down INTEGER,
+            nodebalancer_id INTEGER NOT NULL REFERENCES nodebalancer,
+            PRIMARY KEY (id, nodebalancer_id)
             );
     ");
     println!("{:#?}", nodebalancer_config);
     println!("Done");
 
-//    let nb_cfg_table = connection.execute(
-//            "INSERT INTO nodebalancer_config (algorithm, port, nodebalancer_nb_id) VALUES ($1, $2, $3)",
-//            &[&nodebalancers.algorithm, &nodebalancers.port, &nodebalancers.nodebalancer_id],
-//    ).await;
+    let nb_cfg_table = config_connection.execute(
+            "INSERT INTO nodebalancer_config (id, algorithm, port, up, down, nodebalancer_id) VALUES ($1, $2, $3, $4, $5, $6)",
+            &[&nodebalancer_config.id, &nodebalancer_config.algorithm, &nodebalancer_config.port, &nodebalancer_config.nodes_status.up, &nodebalancer_config.nodes_status.down, &nodebalancer_config.nodebalancer_id],
+    ).await;
 
-    //match update {
-    //    Ok(success) => println!("Row updated."),
-    //    Err(e) => println!("{:?}", e),
-    //    }
+    match nb_cfg_conn.await {
+        Ok(success) => println!("Nodebalancer config table availabe"),
+        Err(e) => println!("{:?}", e),
+        }
+
+    match nb_cfg_table {
+        Ok(success) => println!("Nodebalancer config row updated"),
+        Err(e) => println!("Nodebalanacer config row error {:?}", e),
+        }
 
     Ok(())
 

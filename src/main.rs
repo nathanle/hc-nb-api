@@ -5,7 +5,14 @@ use rust_decimal::prelude::*;
 use chrono::{NaiveDateTime, DateTime, Utc, Local, TimeZone};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use reqwest::Client;
-use crate::database::{update_db_nb, NodeBalancerListObject, NodeBalancerConfigObject};
+use crate::database::{
+    update_db_node,
+    update_db_nb,
+    update_db_config,
+    NodeBalancerListObject,
+    NodeBalancerConfigObject,
+    NodeObject
+};
 
 mod database;
 
@@ -34,15 +41,14 @@ struct NodeBalancerConfigData {
     results: u64,
 }
 
-fn round(c: &f64) -> f64 {
-    let r = Decimal::from_f64(*c as f64)
-        .unwrap()
-        .round_dp(2)
-        .to_f64()
-        .unwrap();
-
-    r
+#[derive(serde::Deserialize, Serialize, Debug)]
+struct NodeListData {
+    data: Vec<NodeObject>,
+    page: u64,
+    pages: u64,
+    results: u64,
 }
+
 fn epoch_to_dt(e: &String) -> String {
     let timestamp = e.parse::<i64>().unwrap();
     let naive = NaiveDateTime::from_timestamp(timestamp, 0);
@@ -87,7 +93,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let nbconfigdata: NodeBalancerConfigData = serde_json::from_value(json.clone()).unwrap();
                     for d in nbconfigdata.data {
                         let configobj: database::NodeBalancerConfigObject = d;
+                        let borrow_configobj = &configobj;
+                        let cfgid = borrow_configobj.id;
+                        let nbid = borrow_configobj.nodebalancer_id;
+                        let _ = update_db_config(configobj).await;
+                        //Node Stuff
+                        let node_url = format!("https://api.linode.com/{}/nodebalancers/{}/configs/{}/nodes", args.api_version, nbid, cfgid);
+                        println!("{:?}", node_url);
+                        let node_response = client.get(node_url)
+                            .send()
+                            .await?;
 
+                        if node_response.status().is_success() {
+                            let json: serde_json::Value = node_response.json().await?;
+                            let nodedata: NodeListData = serde_json::from_value(json.clone()).unwrap();
+                            for d in nodedata.data {
+                                let nodeobj: database::NodeObject = d;
+                                let _ = update_db_node(nodeobj).await;
+                            }
+                        }
                     }
                     println!("{:#?}", json);
                 }
