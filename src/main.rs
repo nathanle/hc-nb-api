@@ -66,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let nbresult: NodeBalancerListData = serde_json::from_value(json.clone()).unwrap();
         for d in nbresult.data {
             let obj: database::NodeBalancerListObject = d;
-            let _ = update_db(obj).await;
+            let _ = update_db_nb(obj).await;
             //println!("{:#?}", obj);
 
         }
