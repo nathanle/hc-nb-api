@@ -126,8 +126,14 @@ pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), B
 
     match update {
         Ok(success) => println!("NB Row updated."),
-        Err(e) => println!("{:?}", e),
+        Err(e) => {
+            if e.to_string().contains("duplicate key value violates unique constraint") {
+                println!("NodeBalancer already in DB: {}", &nodebalancers.ipv4);
+            } else {
+                println!("{:?}", e);
+            }
         }
+    }
 
     Ok(())
 
@@ -185,8 +191,14 @@ pub async fn update_db_config(nodebalancer_config: NodeBalancerConfigObject) -> 
 
     match nb_cfg_table {
         Ok(success) => println!("Nodebalancer config row updated"),
-        Err(e) => println!("Nodebalanacer config row error {:?}", e),
+        Err(e) => {
+            if e.to_string().contains("duplicate key value violates unique constraint") {
+                println!("Config already in DB: {} - Node: {}", &nodebalancer_config.id, &nodebalancer_config.nodebalancer_id);
+            } else {
+                println!("{:?}", e);
+            }
         }
+    }
 
     Ok(())
 
