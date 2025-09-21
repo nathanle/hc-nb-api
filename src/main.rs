@@ -5,6 +5,7 @@ use rust_decimal::prelude::*;
 use chrono::{NaiveDateTime, DateTime, Utc, Local, TimeZone};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use reqwest::Client;
+use std::env;
 use crate::database::{
     create_client,
     db_init,
@@ -21,8 +22,6 @@ mod database;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long)]
-    token: String,
     #[arg(short, long)]
     api_version: String,
 }
@@ -64,8 +63,9 @@ fn epoch_to_dt(e: &String) -> String {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = db_init().await;
     let args = Args::parse();
+    let token = env::var("TOKEN");
     let url = format!("https://api.linode.com/{}/nodebalancers", args.api_version);
-    let auth_header = format!("Bearer {}", args.token);
+    let auth_header = format!("Bearer {}", token.expect("TOKEN not set!"));
     let mut headers = HeaderMap::new();
     headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth_header).unwrap());
     headers.insert("accept", HeaderValue::from_static("application/json"));
