@@ -84,7 +84,7 @@ async fn create_connector() -> MakeTlsConnector {
     connector
 } 
 
-async fn create_client() -> Client {
+pub async fn create_client() -> Client {
     let connector = create_connector().await;
     let password = env::var("DB_PASSWORD");
 
@@ -145,7 +145,7 @@ pub async fn db_init() -> Result<(), Box<dyn std::error::Error>> {
             );
     ");
     match node_table.await {
-        Ok(success) => println!("Node table availabe"),
+        Ok(success) => println!("Node table available"),
         Err(e) => println!("{:?}", e),
         }
 
@@ -155,7 +155,7 @@ pub async fn db_init() -> Result<(), Box<dyn std::error::Error>> {
 
 pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), Box<dyn std::error::Error>> {
     let mut connection = create_client().await;
-    println!("{:#?}", nodebalancers);
+    //println!("{:#?}", nodebalancers);
 
     let update = connection.execute(
             "INSERT INTO nodebalancer (nb_id, ipv4, region, lke_id) VALUES ($1, $2, $3, $4)",
@@ -189,7 +189,7 @@ pub async fn update_db_node(node: NodeObject) -> Result<(), Box<dyn std::error::
 
 pub async fn update_db_config(nodebalancer_config: NodeBalancerConfigObject) -> Result<(), Box<dyn std::error::Error>> {
     let mut config_connection = create_client().await;
-    println!("{:#?}", nodebalancer_config);
+    //println!("{:#?}", nodebalancer_config);
 
     let nb_cfg_table = config_connection.execute(
             "INSERT INTO nodebalancer_config (id, algorithm, port, up, down, nodebalancer_id) VALUES ($1, $2, $3, $4, $5, $6)",
