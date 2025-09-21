@@ -5,6 +5,9 @@ use rust_decimal::prelude::*;
 use chrono::{NaiveDateTime, DateTime, Utc, Local, TimeZone};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use reqwest::Client;
+use crate::database::update_db;
+
+mod database;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -16,31 +19,8 @@ struct Args {
 }
 
 #[derive(serde::Deserialize, Serialize, Debug)]
-struct LkeCluster{
-    id: u64,
-    label: String,
-    r#type: String,
-    url: String,
-}
-
-#[derive(serde::Deserialize, Serialize, Debug)]
-struct NodeBalancerListObject {
-    client_conn_throttle: u64,
-    created: String,
-    hostname: String,
-    id: u64,
-    ipv4: String,
-    ipv6: String,
-    label: String,
-    lke_cluster: LkeCluster,
-    region: String,
-    r#type: String,
-    updated: String,
-}
-
-#[derive(serde::Deserialize, Serialize, Debug)]
 struct NodeBalancerListData {
-    data: Vec<NodeBalancerListObject>,
+    data: Vec<database::NodeBalancerListObject>,
     page: u64,
     pages: u64,
     results: u64,
@@ -85,8 +65,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let json: serde_json::Value = response.json().await?;
         let nbresult: NodeBalancerListData = serde_json::from_value(json.clone()).unwrap();
         for d in nbresult.data {
-            let obj: NodeBalancerListObject = d;
-            println!("{:#?}", obj);
+            let obj: database::NodeBalancerListObject = d;
+            let _ = update_db(obj).await;
+            //println!("{:#?}", obj);
+
         }
         println!("{:#?}", nbresult.pages);
     } else {
