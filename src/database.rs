@@ -6,7 +6,7 @@ use std::env;
 use serde::{Serialize};
 
 #[derive(Debug)]
-struct Nodebalancer {
+pub struct Nodebalancer {
     _id: i32,
     ip_address: String,
     port: i32,
@@ -17,7 +17,7 @@ pub struct NodeBalancerListObject {
     client_conn_throttle: i32,
     created: String,
     hostname: String,
-    id: i32,
+    pub id: i32,
     ipv4: String,
     ipv6: String,
     label: String,
@@ -28,7 +28,7 @@ pub struct NodeBalancerListObject {
 }
 
 #[derive(serde::Deserialize, Serialize, Debug)]
-struct LkeCluster{
+pub struct LkeCluster{
     id: i32,
     label: String,
     r#type: String,
@@ -36,7 +36,7 @@ struct LkeCluster{
 }
 
 #[derive(serde::Deserialize, Serialize, Debug)]
-pub struct NodeBalancerConfig {
+pub struct NodeBalancerConfigObject {
   algorithm: String,
   check: String,
   check_attempts: i32,
@@ -136,7 +136,7 @@ pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), B
 
 }
 
-pub async fn update_db_config(nodebalancer_config: NodeBalancerConfig) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn update_db_config(nodebalancer_config: NodeBalancerConfigObject) -> Result<(), Box<dyn std::error::Error>> {
     let mut connection = create_client().await;
     let nb_cfg_table  = connection.batch_execute("
         CREATE TABLE IF NOT EXISTS node  (
@@ -146,18 +146,18 @@ pub async fn update_db_config(nodebalancer_config: NodeBalancerConfig) -> Result
             nodebalancer_nb_id VARCHAR NOT NULL REFERENCES nodebalancer 
             );
     ");
-    println!("{:#?}", nodebalancers);
+    println!("{:#?}", nodebalancer_config);
     println!("Done");
 
-    let nb_cfg_table = connection.execute(
-            "INSERT INTO nodebalancer_config (algorithm, port, nodebalancer_nb_id) VALUES ($1, $2, $3)",
-            &[&nodebalancers.algorithm, &nodebalancers.port, &nodebalancers.nodebalancer_id],
-    ).await;
+//    let nb_cfg_table = connection.execute(
+//            "INSERT INTO nodebalancer_config (algorithm, port, nodebalancer_nb_id) VALUES ($1, $2, $3)",
+//            &[&nodebalancers.algorithm, &nodebalancers.port, &nodebalancers.nodebalancer_id],
+//    ).await;
 
-    match update {
-        Ok(success) => println!("Row updated."),
-        Err(e) => println!("{:?}", e),
-        }
+    //match update {
+    //    Ok(success) => println!("Row updated."),
+    //    Err(e) => println!("{:?}", e),
+    //    }
 
     Ok(())
 

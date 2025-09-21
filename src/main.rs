@@ -5,7 +5,7 @@ use rust_decimal::prelude::*;
 use chrono::{NaiveDateTime, DateTime, Utc, Local, TimeZone};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use reqwest::Client;
-use crate::database::update_db;
+use crate::database::{update_db_nb, NodeBalancerListObject, NodeBalancerConfigObject};
 
 mod database;
 
@@ -20,7 +20,15 @@ struct Args {
 
 #[derive(serde::Deserialize, Serialize, Debug)]
 struct NodeBalancerListData {
-    data: Vec<database::NodeBalancerListObject>,
+    data: Vec<NodeBalancerListObject>,
+    page: u64,
+    pages: u64,
+    results: u64,
+}
+
+#[derive(serde::Deserialize, Serialize, Debug)]
+struct NodeBalancerConfigData {
+    data: Vec<NodeBalancerConfigObject>,
     page: u64,
     pages: u64,
     results: u64,
@@ -66,7 +74,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let nbresult: NodeBalancerListData = serde_json::from_value(json.clone()).unwrap();
         for d in nbresult.data {
             let obj: database::NodeBalancerListObject = d;
+            let nbid = obj.id;
             let _ = update_db_nb(obj).await;
+            let config_url = format!("https://api.linode.com/{}/nodebalancers/{}/configs", args.api_version, nbid);
+            println!("{:?}", config_url);
+            let config_response = client.get(config_url)
+                .send()
+                .await?;
+
+                if config_response.status().is_success() {
+                    let json: serde_json::Value = config_response.json().await?;
+                    let nbconfigdata: NodeBalancerConfigData = serde_json::from_value(json.clone()).unwrap();
+                    for d in nbconfigdata.data {
+                        let configobj: database::NodeBalancerConfigObject = d;
+
+                    }
+                    println!("{:#?}", json);
+                }
             //println!("{:#?}", obj);
 
         }
