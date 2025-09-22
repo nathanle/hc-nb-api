@@ -86,7 +86,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             for d in nbresult.data {
                 let obj: database::NodeBalancerListObject = d;
                 let nbid = obj.id;
-                let _ = update_db_nb(obj).await;
+                let _ = tokio::spawn(
+                    async move {
+                        let _ = update_db_nb(obj).await;
+                    }
+                );
             }
         } else {
             let mut page = 1;
