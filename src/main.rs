@@ -129,8 +129,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut connection = create_client().await;
     let rows = connection.query("SELECT * FROM node JOIN nodebalancer ON node.nodebalancer_id = nodebalancer.nb_id JOIN nodebalancer_config ON nodebalancer_config.nodebalancer_id = nodebalancer.nb_id;", &[]).await?;
         // Print header
-    println!("{:<10} {:<23} {:<6} {:<10} {:<6} {:<15} {:<15} {:<6} {:<10} {:<5} {:<3} {:<3}", "ID", "Address", "Status", "Config ID", "NB ID", "IPv4 VIP", "Region", "LKE ID", "Algorithm", "Port", "Up", "Down");
+    println!("{:<10} {:<23} {:<6} {:<10} {:<6} {:<15} {:<15} {:<10} {:<5} {:<3} {:<3}", "ID", "Address", "Status", "Config ID", "NB ID", "IPv4 VIP", "Region", "Algorithm", "Port", "Up", "Down");
     println!("--------------------------------------------------------------------------------------------------------------------");
+    //println!("{:#?}", rows);
 
     // Iterate over the rows and print data
     for row in rows {
@@ -139,6 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let status: String = row.get(2);
         let config_id: i32 = row.get(3);
         let nb_id: i32 = row.get(4);
+        let nb_id_none: i32 = row.get(5);
         let vip: String = row.get(6);
         let region: String = row.get(7);
         let lke_id: i32 = row.get(8);
@@ -148,7 +150,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let up: i32 = row.get(12);
         let down: i32 = row.get(13);
         let n_id: i32 = row.get(14);
-        println!("{:<10} {:<23} {:<6} {:<10} {:<6} {:<15} {:<15} {:<6} {:<10} {:<5} {:<3} {:<3}", id, address, status, config_id, nb_id, vip, region, lke_id, algorithm, port, up, down);
+        println!("{:<10} {:<23} {:<6} {:<10} {:<6} {:<15} {:<15} {:<10} {:<5} {:<3} {:<3}", id, address, status, config_id, nb_id, vip, region, algorithm, port, up, down);
 
     }
 

@@ -21,7 +21,7 @@ pub struct NodeBalancerListObject {
     ipv4: String,
     ipv6: String,
     label: String,
-    lke_cluster: LkeCluster,
+    lke_cluster: Option<LkeCluster>,
     region: String,
     r#type: String,
     updated: String,
@@ -45,6 +45,17 @@ pub struct LkeCluster{
     label: String,
     r#type: String,
     url: String,
+}
+
+impl Default for LkeCluster {
+    fn default() -> Self {
+        LkeCluster {
+            id: 0,
+            label: String::new(),
+            r#type: String::new(),
+            url: String::new(),
+        }
+    }
 }
 
 #[derive(serde::Deserialize, Serialize, Debug)]
@@ -88,8 +99,8 @@ pub async fn create_client() -> Client {
     let connector = create_connector().await;
     let password = env::var("DB_PASSWORD");
 
-    let url = format!("postgresql://akmadmin:{}@172.237.137.78:25079/defaultdb", password.expect("Password ENV var DB_PASSWORD not set."));
-    let Ok((client, connection)) = tokio_postgres::connect(&url, connector).await else { todo!() };
+    let url = format!("postgresql://akmadmin:{}@172.237.135.190:19312/defaultdb", password.expect("Password ENV var DB_PASSWORD not set."));
+    let Ok((client, connection)) = tokio_postgres::connect(&url, connector).await else { panic!("Client failure.") };
     tokio::spawn(async move {
         if let Err(e) = connection.await {
             eprintln!("connection error: {}", e);
@@ -122,8 +133,8 @@ pub async fn db_init() -> Result<(), Box<dyn std::error::Error>> {
             id INTEGER NOT NULL,
             algorithm VARCHAR NOT NULL,
             port INTEGER NOT NULL,
-            up INTEGER,
-            down INTEGER,
+            up INTEGER NOT NULL,
+            down INTEGER NOT NULL,
             nodebalancer_id INTEGER NOT NULL REFERENCES nodebalancer,
             PRIMARY KEY (id, nodebalancer_id)
             );
@@ -159,7 +170,7 @@ pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), B
 
     let update = connection.execute(
             "INSERT INTO nodebalancer (nb_id, ipv4, region, lke_id) VALUES ($1, $2, $3, $4)",
-            &[&nodebalancers.id, &nodebalancers.ipv4, &nodebalancers.region, &nodebalancers.lke_cluster.id],
+            &[&nodebalancers.id, &nodebalancers.ipv4, &nodebalancers.region, &nodebalancers.lke_cluster.unwrap_or_default().id],
     ).await;
 
     match update {
