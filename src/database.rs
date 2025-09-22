@@ -178,7 +178,7 @@ pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), B
         Ok(success) => println!("NB Row updated."),
         Err(e) => {
             if e.to_string().contains("duplicate key value violates unique constraint") {
-                println!("NodeBalancer already in DB: {}", &nodebalancers.ipv4);
+                ();
             } else {
                 println!("{:?}", e);
             }
