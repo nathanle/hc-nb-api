@@ -98,8 +98,9 @@ async fn create_connector() -> MakeTlsConnector {
 pub async fn create_client() -> Client {
     let connector = create_connector().await;
     let password = env::var("DB_PASSWORD");
+    let host_port = env::var("DB_HOSTPORT");
 
-    let url = format!("postgresql://akmadmin:{}@172.237.135.190:19312/defaultdb", password.expect("Password ENV var DB_PASSWORD not set."));
+    let url = format!("postgresql://akmadmin:{}@{}/defaultdb", password.expect("Password ENV var DB_PASSWORD not set."), host_port.expect("DB Host and Port via DB_HOSTPORT not set"));
     let Ok((client, connection)) = tokio_postgres::connect(&url, connector).await else { panic!("Client failure.") };
     tokio::spawn(async move {
         if let Err(e) = connection.await {
