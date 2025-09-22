@@ -89,7 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = update_db_nb(obj).await;
             }
         } else {
-            let mut page = 2;
+            let mut page = 1;
             while page <= nbresult.pages {
                 let pageurl = format!("https://api.linode.com/{}/nodebalancers?page={}", args.api_version, &page);
 
