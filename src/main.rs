@@ -9,6 +9,7 @@ use std::env;
 use crate::database::{
     create_client,
     db_init,
+    get_nb_ids,
     update_db_node,
     update_db_nb,
     update_db_config,
@@ -24,6 +25,10 @@ mod database;
 struct Args {
     #[arg(short, long)]
     api_version: String,
+    #[arg(short, long)]
+    config: bool,
+    #[arg(short, long)]
+    data: bool,
 }
 
 #[derive(serde::Deserialize, Serialize, Debug)]
@@ -95,6 +100,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             let mut page = 1;
             while page <= nbresult.pages {
+                println!("Processing page {}", page);
                 let pageurl = format!("https://api.linode.com/{}/nodebalancers?page={}", args.api_version, &page);
 
                 let response = client.get(pageurl)
@@ -117,6 +123,63 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 page += 1;
             }
         }
+        if args.config {
+            let nb_ids = get_nb_ids().await;
+            for n in nb_ids.unwrap() {
+                let nbid: i32 = n.get(0);
+                let config_url = format!("https://api.linode.com/{}/nodebalancers/{}/configs", args.api_version, nbid);
+                let config_response = client.get(config_url)
+                    .send()
+                    .await?;
+
+                if config_response.status().is_success() {
+                    let json: serde_json::Value = config_response.json().await?;
+                    let nbconfigdata: NodeBalancerConfigData = serde_json::from_value(json.clone()).unwrap();
+
+                    if nbconfigdata.pages == 1 {
+                        for d in nbconfigdata.data {
+                            let configobj: database::NodeBalancerConfigObject = d;
+                            let borrow_configobj = &configobj;
+                            let cfgid = borrow_configobj.id;
+                            let nbid = borrow_configobj.nodebalancer_id;
+                            let _ = tokio::spawn(
+                                async move {
+                                    let _ = update_db_config(configobj).await;
+                                }
+                            );
+                        }
+                    } else {
+                        let mut page = 1;
+                        while page <= nbconfigdata.pages {
+                            println!("Processing page {}", page);
+                            let config_url = format!("https://api.linode.com/{}/nodebalancers/{}/configs?page={}", args.api_version, nbid, &page);
+
+                            let config_response = client.get(config_url)
+                                .send()
+                                .await?;
+
+                            if config_response.status().is_success() {
+                                let json: serde_json::Value = config_response.json().await?;
+                                let nbconfigdata: NodeBalancerConfigData = serde_json::from_value(json.clone()).unwrap();
+                                for d in nbconfigdata.data {
+                                    let configobj: database::NodeBalancerConfigObject = d;
+                                    let borrow_configobj = &configobj;
+                                    let cfgid = borrow_configobj.id;
+                                    let nbid = borrow_configobj.nodebalancer_id;
+                                    let _ = tokio::spawn(
+                                        async move {
+                                            let _ = update_db_config(configobj).await;
+                                        }
+                                    );
+                                }
+                            }
+                            page += 1;
+                        }
+                    }
+                }
+            }
+        }
+    
 
 
         //    let config_url = format!("https://api.linode.com/{}/nodebalancers/{}/configs", args.api_version, nbid);
@@ -160,32 +223,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Request failed with status: {}", response.status());
     }
 
-    let mut connection = create_client().await;
-    let rows = connection.query("SELECT * FROM node JOIN nodebalancer ON node.nodebalancer_id = nodebalancer.nb_id JOIN nodebalancer_config ON nodebalancer_config.nodebalancer_id = nodebalancer.nb_id;", &[]).await?;
-        // Print header
-    println!("{:<10} {:<23} {:<6} {:<10} {:<6} {:<15} {:<15} {:<10} {:<5} {:<3} {:<3}", "ID", "Address", "Status", "Config ID", "NB ID", "IPv4 VIP", "Region", "Algorithm", "Port", "Up", "Down");
-    println!("--------------------------------------------------------------------------------------------------------------------");
-    //println!("{:#?}", rows);
+    if args.data {
+        let mut connection = create_client().await;
+        let rows = connection.query("SELECT * FROM node JOIN nodebalancer ON node.nodebalancer_id = nodebalancer.nb_id JOIN nodebalancer_config ON nodebalancer_config.nodebalancer_id = nodebalancer.nb_id;", &[]).await?;
+            // Print header
+        println!("{:<10} {:<23} {:<6} {:<10} {:<6} {:<15} {:<15} {:<10} {:<5} {:<3} {:<3}", "ID", "Address", "Status", "Config ID", "NB ID", "IPv4 VIP", "Region", "Algorithm", "Port", "Up", "Down");
+        println!("--------------------------------------------------------------------------------------------------------------------");
+        //println!("{:#?}", rows);
 
-    // Iterate over the rows and print data
-    for row in rows {
-        let id: i32 = row.get(0);
-        let address: String = row.get(1);
-        let status: String = row.get(2);
-        let config_id: i32 = row.get(3);
-        let nb_id: i32 = row.get(4);
-        let nb_id_none: i32 = row.get(5);
-        let vip: String = row.get(6);
-        let region: String = row.get(7);
-        let lke_id: i32 = row.get(8);
-        let c_id: i32 = row.get(9);
-        let algorithm: String = row.get(10);
-        let port: i32 = row.get(11);
-        let up: i32 = row.get(12);
-        let down: i32 = row.get(13);
-        let n_id: i32 = row.get(14);
-        println!("{:<10} {:<23} {:<6} {:<10} {:<6} {:<15} {:<15} {:<10} {:<5} {:<3} {:<3}", id, address, status, config_id, nb_id, vip, region, algorithm, port, up, down);
-
+        // Iterate over the rows and print data
+        for row in rows {
+            let id: i32 = row.get(0);
+            let address: String = row.get(1);
+            let status: String = row.get(2);
+            let config_id: i32 = row.get(3);
+            let nb_id: i32 = row.get(4);
+            let nb_id_none: i32 = row.get(5);
+            let vip: String = row.get(6);
+            let region: String = row.get(7);
+            let lke_id: i32 = row.get(8);
+            let c_id: i32 = row.get(9);
+            let algorithm: String = row.get(10);
+            let port: i32 = row.get(11);
+            let up: i32 = row.get(12);
+            let down: i32 = row.get(13);
+            let n_id: i32 = row.get(14);
+            println!("{:<10} {:<23} {:<6} {:<10} {:<6} {:<15} {:<15} {:<10} {:<5} {:<3} {:<3}", id, address, status, config_id, nb_id, vip, region, algorithm, port, up, down);
+        }
     }
 
     Ok(())

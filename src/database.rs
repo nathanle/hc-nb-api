@@ -1,4 +1,4 @@
-use tokio_postgres::{Client, Error};
+use tokio_postgres::{Row, Client, Error};
 use std::collections::HashMap;
 use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
 use postgres_openssl::MakeTlsConnector;
@@ -189,6 +189,16 @@ pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), B
 
 }
 
+pub async fn get_nb_ids() -> Result<Vec<Row>, Error> {
+    let mut node_connection = create_client().await;
+    let nb_table = node_connection.query(
+        "SELECT nb_id FROM nodebalancer", &[],
+    ).await;
+
+    Ok(nb_table?)
+
+}
+
 pub async fn update_db_node(node: NodeObject) -> Result<(), Box<dyn std::error::Error>> {
     let mut node_connection = create_client().await;
     let nb_table = node_connection.execute(
@@ -209,10 +219,12 @@ pub async fn update_db_config(nodebalancer_config: NodeBalancerConfigObject) -> 
     ).await;
 
     match nb_cfg_table {
-        Ok(success) => println!("Nodebalancer config row updated"),
+        //Ok(success) => println!("Nodebalancer config row updated"),
+        Ok(success) => (),
         Err(e) => {
             if e.to_string().contains("duplicate key value violates unique constraint") {
-                println!("Config already in DB: {} - Node: {}", &nodebalancer_config.id, &nodebalancer_config.nodebalancer_id);
+                ();
+                //println!("Config already in DB: {} - Node: {}", &nodebalancer_config.id, &nodebalancer_config.nodebalancer_id);
             } else {
                 println!("{:?}", e);
             }
