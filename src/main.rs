@@ -88,6 +88,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let nbid = obj.id;
                 let _ = update_db_nb(obj).await;
             }
+        } else {
+            let mut page = 2;
+            while page <= nbresult.pages {
+                let pageurl = format!("https://api.linode.com/{}/nodebalancers?page={}", args.api_version, &page);
+
+                let response = client.get(pageurl)
+                    .send()
+                    .await?;
+
+                if response.status().is_success() {
+                    let json: serde_json::Value = response.json().await?;
+                    let nbresult: NodeBalancerListData = serde_json::from_value(json.clone()).unwrap();
+                    for d in nbresult.data {
+                        let obj: database::NodeBalancerListObject = d;
+                        let nbid = obj.id;
+                        let _ = update_db_nb(obj).await;
+                    }
+                }
+                page += 1;
+            }
         }
 
 
@@ -127,7 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             //println!("{:#?}", obj);
 
         //}
-        println!("{:#?}", nbresult.pages);
+        //println!("{:#?}", nbresult.pages);
     } else {
         eprintln!("Request failed with status: {}", response.status());
     }
