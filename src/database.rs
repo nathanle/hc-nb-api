@@ -199,6 +199,15 @@ pub async fn get_nb_ids() -> Result<Vec<Row>, Error> {
 
 }
 
+pub async fn get_nbcfg_ids() -> Result<Vec<Row>, Error> {
+    let mut node_connection = create_client().await;
+    let nb_table = node_connection.query(
+        "SELECT id FROM nodebalancer_config", &[],
+    ).await;
+
+    Ok(nb_table?)
+
+}
 pub async fn update_db_node(node: NodeObject) -> Result<(), Box<dyn std::error::Error>> {
     let mut node_connection = create_client().await;
     let nb_table = node_connection.execute(
