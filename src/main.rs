@@ -10,6 +10,7 @@ use crate::database::{
     create_client,
     db_init,
     get_nb_ids,
+    get_nbcfg_ids,
     update_db_node,
     update_db_nb,
     update_db_config,
@@ -27,6 +28,8 @@ struct Args {
     api_version: String,
     #[arg(short, long)]
     config: bool,
+    #[arg(short, long)]
+    node: bool,
     #[arg(short, long)]
     data: bool,
 }
@@ -179,71 +182,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+        if args.node {
+            let nbcfg_ids = get_nbcfg_ids().await;
+            for n in nbcfg_ids.unwrap() {
+                let cfgid: i32 = n.get(0);
+                let nbid: i32 = n.get(1);
+                let node_url = format!("https://api.linode.com/{}/nodebalancers/{}/configs/{}/nodes", args.api_version, nbid, cfgid);
+                let node_response = client.get(node_url)
+                    .send()
+                    .await?;
 
-                    let json: serde_json::Value = config_response.json().await?;
-                    let nbconfigdata: NodeBalancerConfigData = serde_json::from_value(json.clone()).unwrap();
-                    for d in nbconfigdata.data {
-                        let configobj: database::NodeBalancerConfigObject = d;
-                        let borrow_configobj = &configobj;
-                        let cfgid = borrow_configobj.id;
-                        let nbid = borrow_configobj.nodebalancer_id;
-                        let _ = update_db_config(configobj).await;
-                        //Node Stuff
-                        let node_url = format!("https://api.linode.com/{}/nodebalancers/{}/configs/{}/nodes", args.api_version, nbid, cfgid);
-                        //println!("{:?}", node_url);
-                        let node_response = client.get(node_url)
-                            .send()
-                            .await?;
+                if node_response.status().is_success() {
+                    let json: serde_json::Value = node_response.json().await?;
+                    let nodedata: NodeListData = serde_json::from_value(json.clone()).unwrap();
+                    if nodedata.pages == 1 {
+                        for d in nodedata.data {
+                            let nodeobj: database::NodeObject = d;
+                            let _ = tokio::spawn(
+                                async move {
+                                    let _ = update_db_node(nodeobj).await;
+                                }
+                            );
+                        }
+                    } else {
+                        let mut page = 1;
+                        while page <= nodedata.pages {
+                            println!("Processing node page {}", page);
+                            let node_url = format!("https://api.linode.com/{}/nodebalancers/{}/configs/{}/nodes", args.api_version, nbid, cfgid);
+                            let node_response = client.get(node_url)
+                                .send()
+                                .await?;
 
-                        if node_response.status().is_success() {
-                            let json: serde_json::Value = node_response.json().await?;
-                            let nodedata: NodeListData = serde_json::from_value(json.clone()).unwrap();
-                            for d in nodedata.data {
-                                let nodeobj: database::NodeObject = d;
-                                let _ = update_db_node(nodeobj).await;
+                            if node_response.status().is_success() {
+                                let json: serde_json::Value = node_response.json().await?;
+                                let nodedata: NodeListData = serde_json::from_value(json.clone()).unwrap();
+                                for d in nodedata.data {
+                                    let nodeobj: database::NodeObject = d;
+                                    let _ = tokio::spawn(
+                                        async move {
+                                            let _ = update_db_node(nodeobj).await;
+                                        }
+                                    );
+                                }
                             }
+                            page += 1;
                         }
                     }
-    
-
-
-        //    let config_url = format!("https://api.linode.com/{}/nodebalancers/{}/configs", args.api_version, nbid);
-        //    //println!("{:?}", config_url);
-        //    let config_response = client.get(config_url)
-        //        .send()
-        //        .await?;
-
-        //        if config_response.status().is_success() {
-        //            let json: serde_json::Value = config_response.json().await?;
-        //            let nbconfigdata: NodeBalancerConfigData = serde_json::from_value(json.clone()).unwrap();
-        //            for d in nbconfigdata.data {
-        //                let configobj: database::NodeBalancerConfigObject = d;
-        //                let borrow_configobj = &configobj;
-        //                let cfgid = borrow_configobj.id;
-        //                let nbid = borrow_configobj.nodebalancer_id;
-        //                let _ = update_db_config(configobj).await;
-                        //Node Stuff
-        //                let node_url = format!("https://api.linode.com/{}/nodebalancers/{}/configs/{}/nodes", args.api_version, nbid, cfgid);
-                        //println!("{:?}", node_url);
-        //                let node_response = client.get(node_url)
-        //                    .send()
-        //                    .await?;
-
-        //                if node_response.status().is_success() {
-        //                    let json: serde_json::Value = node_response.json().await?;
-        //                    let nodedata: NodeListData = serde_json::from_value(json.clone()).unwrap();
-        //                    for d in nodedata.data {
-        //                        let nodeobj: database::NodeObject = d;
-        //                        let _ = update_db_node(nodeobj).await;
-        //                    }
-        //                }
-        //            }
-                    //println!("{:#?}", json);
-        //        }
-            //println!("{:#?}", obj);
-
-        //}
-        //println!("{:#?}", nbresult.pages);
+                }
+            }
+        }
     } else {
         eprintln!("Request failed with status: {}", response.status());
     }
