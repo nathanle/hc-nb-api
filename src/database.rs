@@ -209,7 +209,7 @@ pub async fn get_nbcfg_ids() -> Result<Vec<Row>, Error> {
 
 }
 
-pub async fn get_by_node_ip_nbcfg(ip) -> Result<Vec<Row>, Error> {
+pub async fn get_by_node_ip_nbcfg(ip: String) -> Result<Vec<Row>, Error> {
     let mut node_connection = create_client().await;
     let nb_table = node_connection.query(
         "select * from node where address like '%$1%' INNER JOIN nodebalancer_config ON node.config_id = nodebalancer_config.id;", &[&ip],
@@ -219,7 +219,7 @@ pub async fn get_by_node_ip_nbcfg(ip) -> Result<Vec<Row>, Error> {
 
 }
 
-pub async fn get_by_node_ip_nb(ip) -> Result<Vec<Row>, Error> {
+pub async fn get_by_node_ip_nb(ip: String) -> Result<Vec<Row>, Error> {
     let mut node_connection = create_client().await;
     let nb_table = node_connection.query(
         "select * from node INNER JOIN nodebalancer ON node.nodebalancer_id = nodebalancer.nb_id where address like '%$1%';", &[&ip],
