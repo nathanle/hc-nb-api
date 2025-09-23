@@ -199,6 +199,16 @@ pub async fn get_nb_ids() -> Result<Vec<Row>, Error> {
 
 }
 
+pub async fn get_nb_by_loc(loc: String) -> Result<Vec<Row>, Error> {
+    let mut node_connection = create_client().await;
+    let nb_table = node_connection.query(
+        "SELECT nb_id FROM nodebalancer where region like '%$1'", &[&loc],
+    ).await;
+
+    Ok(nb_table?)
+
+}
+
 pub async fn get_nbcfg_ids() -> Result<Vec<Row>, Error> {
     let mut node_connection = create_client().await;
     let nb_table = node_connection.query(
