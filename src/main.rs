@@ -60,96 +60,98 @@ fn epoch_to_dt(e: &String) -> String {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = db_init().await;
-    let args = Args::parse();
-    let token = env::var("TOKEN").expect("TOKEN is not set!");
-    let api_version = env::var("APIVERSION").expect("APIVERSION is not set!");
-    let url = format!("https://api.linode.com/{}/nodebalancers", api_version);
-    let auth_header = format!("Bearer {}", token);
-    let mut headers = HeaderMap::new();
-    headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth_header).unwrap());
-    headers.insert("accept", HeaderValue::from_static("application/json"));
+    loop {
+        let args = Args::parse();
+        let token = env::var("TOKEN").expect("TOKEN is not set!");
+        let api_version = env::var("APIVERSION").expect("APIVERSION is not set!");
+        let url = format!("https://api.linode.com/{}/nodebalancers", api_version);
+        let auth_header = format!("Bearer {}", token);
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth_header).unwrap());
+        headers.insert("accept", HeaderValue::from_static("application/json"));
 
-    let client = Client::builder()
-        .default_headers(headers)
-        .build()?;
+        let client = Client::builder()
+            .default_headers(headers)
+            .build()?;
 
-    let response = client.get(url)
-        .send()
-        .await?;
+        let response = client.get(url)
+            .send()
+            .await?;
 
-    if response.status().is_success() {
-        let json: serde_json::Value = response.json().await?;
-        let nbresult: NodeBalancerListData = serde_json::from_value(json.clone()).unwrap();
+        if response.status().is_success() {
+            let json: serde_json::Value = response.json().await?;
+            let nbresult: NodeBalancerListData = serde_json::from_value(json.clone()).unwrap();
 
-        if nbresult.pages == 1 {
-            for d in nbresult.data {
-                let obj: database::NodeBalancerListObject = d;
-                let nbid = obj.id;
-                println!("{:#?}", nbid);
-                let _ = update_db_nb(obj).await;
-                //let _ = tokio::spawn(
-                //    async move {
-                //        let _ = update_db_nb(obj).await;
-                //    }
-                //);
+            if nbresult.pages == 1 {
+                for d in nbresult.data {
+                    let obj: database::NodeBalancerListObject = d;
+                    let nbid = obj.id;
+                    //println!("{:#?}", nbid);
+                    let _ = update_db_nb(obj).await;
+                    //let _ = tokio::spawn(
+                    //    async move {
+                    //        let _ = update_db_nb(obj).await;
+                    //    }
+                    //);
+                }
+            } else {
+                let mut page = 1;
+                while page <= nbresult.pages {
+                    //println!("Processing page {}", page);
+                    let pageurl = format!("https://api.linode.com/{}/nodebalancers?page={}", api_version, &page);
+
+                    let response = client.get(pageurl)
+                        .send()
+                        .await?;
+
+                    if response.status().is_success() {
+                        let json: serde_json::Value = response.json().await?;
+                        let nbresult: NodeBalancerListData = serde_json::from_value(json.clone()).unwrap();
+                        for d in nbresult.data {
+                            let obj: database::NodeBalancerListObject = d;
+                            let nbid = obj.id;
+                            let _ = tokio::spawn(
+                                async move {
+                                    let _ = update_db_nb(obj).await;
+                                }
+                            );
+                        }
+                    }
+                    page += 1;
+                }
             }
         } else {
-            let mut page = 1;
-            while page <= nbresult.pages {
-                //println!("Processing page {}", page);
-                let pageurl = format!("https://api.linode.com/{}/nodebalancers?page={}", api_version, &page);
+            eprintln!("Request failed with status: {}", response.status());
+        }
 
-                let response = client.get(pageurl)
-                    .send()
-                    .await?;
+        if args.data {
+            let mut connection = create_client().await;
+            let rows = connection.query("SELECT * FROM nodebalancer", &[]).await?;
+            println!("{:<10} {:<23} {:<10} {:<10}", "ID", "Address", "Region", "LKE ID");
+            println!("--------------------------------------------------------------------------------------------------------------------");
+            //println!("{:#?}", rows);
 
-                if response.status().is_success() {
-                    let json: serde_json::Value = response.json().await?;
-                    let nbresult: NodeBalancerListData = serde_json::from_value(json.clone()).unwrap();
-                    for d in nbresult.data {
-                        let obj: database::NodeBalancerListObject = d;
-                        let nbid = obj.id;
-                        let _ = tokio::spawn(
-                            async move {
-                                let _ = update_db_nb(obj).await;
-                            }
-                        );
-                    }
-                }
-                page += 1;
+            // Iterate over the rows and print data
+            for row in rows {
+                let id: i32 = row.get(0);
+                let address: String = row.get(1);
+            //    let status: String = row.get(2);
+            //    let config_id: i32 = row.get(3);
+            //    let nb_id: i32 = row.get(4);
+            //    let nb_id_none: i32 = row.get(5);
+            //    let vip: String = row.get(6);
+                let region: String = row.get(2);
+                let lke_id: i32 = row.get(3);
+            //    let c_id: i32 = row.get(9);
+            //    let algorithm: String = row.get(10);
+            //    let port: i32 = row.get(11);
+            //    let up: i32 = row.get(12);
+            //    let down: i32 = row.get(13);
+            //    let n_id: i32 = row.get(14);
+                println!("{:<10} {:<23} {:<10} {:<10}", id, address, region, lke_id);
             }
         }
-    } else {
-        eprintln!("Request failed with status: {}", response.status());
+
+        //Ok(())
     }
-
-    if args.data {
-        let mut connection = create_client().await;
-        let rows = connection.query("SELECT * FROM nodebalancer", &[]).await?;
-        println!("{:<10} {:<23} {:<10} {:<10}", "ID", "Address", "Region", "LKE ID");
-        println!("--------------------------------------------------------------------------------------------------------------------");
-        //println!("{:#?}", rows);
-
-        // Iterate over the rows and print data
-        for row in rows {
-            let id: i32 = row.get(0);
-            let address: String = row.get(1);
-        //    let status: String = row.get(2);
-        //    let config_id: i32 = row.get(3);
-        //    let nb_id: i32 = row.get(4);
-        //    let nb_id_none: i32 = row.get(5);
-        //    let vip: String = row.get(6);
-            let region: String = row.get(2);
-            let lke_id: i32 = row.get(3);
-        //    let c_id: i32 = row.get(9);
-        //    let algorithm: String = row.get(10);
-        //    let port: i32 = row.get(11);
-        //    let up: i32 = row.get(12);
-        //    let down: i32 = row.get(13);
-        //    let n_id: i32 = row.get(14);
-            println!("{:<10} {:<23} {:<10} {:<10}", id, address, region, lke_id);
-        }
-    }
-
-    Ok(())
 }

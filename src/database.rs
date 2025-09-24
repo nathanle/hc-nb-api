@@ -143,14 +143,13 @@ pub async fn update_db_nb(nodebalancers: NodeBalancerListObject) -> Result<(), B
             "INSERT INTO nodebalancer (nb_id, ipv4, region, lke_id) VALUES ($1, $2, $3, $4)",
             &[&nodebalancers.id, &nodebalancers.ipv4, &nodebalancers.region, &nodebalancers.lke_cluster.unwrap_or_default().id],
     ).await;
-    println!("{:?}", update);
 
     match update {
         Ok(success) => println!("NB Row updated."),
         Err(e) => {
             if e.to_string().contains("duplicate key value violates unique constraint") {
-                //println!("{:?}", e);
                 ();
+                //println!("{:?}", e);
             } else {
                 println!("{:?}", e);
             }
