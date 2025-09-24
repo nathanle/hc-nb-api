@@ -9,11 +9,7 @@ use std::env;
 use crate::database::{
     create_client,
     db_init,
-    get_nb_ids,
-    get_nbcfg_ids,
-    update_db_node,
     update_db_nb,
-    update_db_config,
     NodeBalancerListObject,
     NodeBalancerConfigObject,
     NodeObject
@@ -24,12 +20,6 @@ mod database;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long)]
-    api_version: String,
-    #[arg(short, long)]
-    config: bool,
-    #[arg(short, long)]
-    node: bool,
     #[arg(short, long)]
     data: bool,
 }
@@ -71,9 +61,10 @@ fn epoch_to_dt(e: &String) -> String {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = db_init().await;
     let args = Args::parse();
-    let token = env::var("TOKEN");
-    let url = format!("https://api.linode.com/{}/nodebalancers", args.api_version);
-    let auth_header = format!("Bearer {}", token.expect("TOKEN not set!"));
+    let token = env::var("TOKEN").expect("TOKEN is not set!");
+    let api_version = env::var("APIVERSION").expect("APIVERSION is not set!");
+    let url = format!("https://api.linode.com/{}/nodebalancers", api_version);
+    let auth_header = format!("Bearer {}", token);
     let mut headers = HeaderMap::new();
     headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth_header).unwrap());
     headers.insert("accept", HeaderValue::from_static("application/json"));
@@ -104,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut page = 1;
             while page <= nbresult.pages {
                 //println!("Processing page {}", page);
-                let pageurl = format!("https://api.linode.com/{}/nodebalancers?page={}", args.api_version, &page);
+                let pageurl = format!("https://api.linode.com/{}/nodebalancers?page={}", api_version, &page);
 
                 let response = client.get(pageurl)
                     .send()

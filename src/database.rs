@@ -4,6 +4,10 @@ use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
 use postgres_openssl::MakeTlsConnector;
 use std::env;
 use serde::{Serialize};
+use std::sync::LazyLock;
+
+static maindb_pw: LazyLock<String> = std::sync::LazyLock::new(|| { env::var("MAINDB_PASSWORD").expect("MAINDB_PASSWORD not set!") });
+static maindb_hostport: LazyLock<String> = std::sync::LazyLock::new(|| { env::var("MAINDB_HOSTPORT").expect("MAINDB_HOSTPORT not set!") });
 
 #[derive(Debug)]
 pub struct Nodebalancer {
@@ -97,10 +101,8 @@ async fn create_connector() -> MakeTlsConnector {
 
 pub async fn create_client() -> Client {
     let connector = create_connector().await;
-    let password = env::var("DB_PASSWORD");
-    let host_port = env::var("DB_HOSTPORT");
 
-    let url = format!("postgresql://akmadmin:{}@{}/defaultdb", password.expect("Password ENV var DB_PASSWORD not set."), host_port.expect("DB Host and Port via DB_HOSTPORT not set"));
+    let url = format!("postgresql://akmadmin:{}@{}/defaultdb", maindb_pw.to_string(), maindb_hostport.to_string());
     let Ok((client, connection)) = tokio_postgres::connect(&url, connector).await else { panic!("Client failure.") };
     tokio::spawn(async move {
         if let Err(e) = connection.await {
@@ -125,39 +127,7 @@ pub async fn db_init() -> Result<(), Box<dyn std::error::Error>> {
     ");
 
     match main_table.await {
-        Ok(success) => println!("Nodebalancer table availabe"),
-        Err(e) => println!("{:?}", e),
-        }
-
-    let nb_cfg_conn  = connection.batch_execute("
-        CREATE TABLE IF NOT EXISTS nodebalancer_config  (
-            id INTEGER NOT NULL,
-            algorithm VARCHAR NOT NULL,
-            port INTEGER NOT NULL,
-            up INTEGER NOT NULL,
-            down INTEGER NOT NULL,
-            nodebalancer_id INTEGER NOT NULL REFERENCES nodebalancer,
-            PRIMARY KEY (id, nodebalancer_id)
-            );
-    ");
-    match nb_cfg_conn.await {
-        Ok(success) => println!("Nodebalancer config table availabe"),
-        Err(e) => println!("{:?}", e),
-        }
-
-
-    let node_table  = connection.batch_execute("
-        CREATE TABLE IF NOT EXISTS node  (
-            id INTEGER NOT NULL,
-            address VARCHAR NOT NULL,
-            status VARCHAR NOT NULL,
-            config_id INTEGER NOT NULL,
-            nodebalancer_id INTEGER NOT NULL REFERENCES nodebalancer,
-            PRIMARY KEY (id, nodebalancer_id)
-            );
-    ");
-    match node_table.await {
-        Ok(success) => println!("Node table available"),
+        Ok(success) => println!("Nodebalancer table available"),
         Err(e) => println!("{:?}", e),
         }
 
@@ -196,82 +166,5 @@ pub async fn get_nb_ids() -> Result<Vec<Row>, Error> {
     ).await;
 
     Ok(nb_table?)
-
-}
-
-pub async fn get_nb_by_loc(loc: String) -> Result<Vec<Row>, Error> {
-    let mut node_connection = create_client().await;
-    let nb_table = node_connection.query(
-        "SELECT nb_id FROM nodebalancer where region like '%$1'", &[&loc],
-    ).await;
-
-    Ok(nb_table?)
-
-}
-
-pub async fn get_nbcfg_ids() -> Result<Vec<Row>, Error> {
-    let mut node_connection = create_client().await;
-    let nb_table = node_connection.query(
-        "SELECT id, nodebalancer_id FROM nodebalancer_config", &[],
-    ).await;
-
-    Ok(nb_table?)
-
-}
-
-pub async fn get_by_node_ip_nbcfg(ip: String) -> Result<Vec<Row>, Error> {
-    let mut node_connection = create_client().await;
-    let nb_table = node_connection.query(
-        "select * from node where address like '%$1%' INNER JOIN nodebalancer_config ON node.config_id = nodebalancer_config.id;", &[&ip],
-    ).await;
-
-    Ok(nb_table?)
-
-}
-
-pub async fn get_by_node_ip_nb(ip: String) -> Result<Vec<Row>, Error> {
-    let mut node_connection = create_client().await;
-    let nb_table = node_connection.query(
-        "select * from node INNER JOIN nodebalancer ON node.nodebalancer_id = nodebalancer.nb_id where address like '%$1%';", &[&ip],
-    ).await;
-
-    Ok(nb_table?)
-
-}
-
-pub async fn update_db_node(node: NodeObject) -> Result<(), Box<dyn std::error::Error>> {
-    let mut node_connection = create_client().await;
-    let nb_table = node_connection.execute(
-            "INSERT INTO node (id, address, status, config_id, nodebalancer_id) VALUES ($1, $2, $3, $4, $5)",
-            &[&node.id, &node.address, &node.status, &node.config_id, &node.nodebalancer_id],
-    ).await;
-
-    Ok(())
-}
-
-pub async fn update_db_config(nodebalancer_config: NodeBalancerConfigObject) -> Result<(), Box<dyn std::error::Error>> {
-    let mut config_connection = create_client().await;
-    //println!("{:#?}", nodebalancer_config);
-
-    let nb_cfg_table = config_connection.execute(
-            "INSERT INTO nodebalancer_config (id, algorithm, port, up, down, nodebalancer_id) VALUES ($1, $2, $3, $4, $5, $6)",
-            &[&nodebalancer_config.id, &nodebalancer_config.algorithm, &nodebalancer_config.port, &nodebalancer_config.nodes_status.up, &nodebalancer_config.nodes_status.down, &nodebalancer_config.nodebalancer_id],
-    ).await;
-
-    match nb_cfg_table {
-        //Ok(success) => println!("Nodebalancer config row updated"),
-        Ok(success) => (),
-        Err(e) => {
-            if e.to_string().contains("duplicate key value violates unique constraint") {
-                ();
-                //println!("Config already in DB: {} - Node: {}", &nodebalancer_config.id, &nodebalancer_config.nodebalancer_id);
-            } else {
-                println!("{:?}", e);
-            }
-        }
-    }
-
-    Ok(())
-
 
 }
