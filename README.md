@@ -30,7 +30,46 @@ stringData:
 
 5. Apply `hc-secrets.yaml`
 
-6. Apply `hc-deployment.yaml`
+6. Adjust `hc-deployment.yaml` if needed
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hc-nb-main 
+  name: health-check
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hc-nb-main 
+  template:
+    metadata:
+      labels:
+        app: hc-nb-main 
+    spec:
+      serviceAccountName: node-health-check-operator-rs-account
+      imagePullSecrets:
+      - name: ghcr-login-secret
+      containers:
+      - name: hc-nb-main 
+          image: nathanles/hc-nb-main:latest
+        envFrom:
+        - secretRef:
+            name: hc-secrets
+        resources:
+          requests:
+            memory: "10Mi"
+            cpu: "10m"
+          limits:
+            memory: "6Gi"
+            cpu: "1000m"
+        imagePullPolicy: IfNotPresent 
+```
+```
+```
+
+7. Apply `hc-deployment.yaml`
 
 
 
