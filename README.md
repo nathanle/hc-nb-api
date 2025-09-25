@@ -1,5 +1,9 @@
 # hc-nb-api
 
+This is the service for collecting all NB in an account and storing them in a Postgres DB in Linode. There is a client service here for consuming this data:[url=https://github.com/nathanle/hc-nb-api-client].
+
+
+
 ```yaml
 apiVersion: v1
 kind: Secret
